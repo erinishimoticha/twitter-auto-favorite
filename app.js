@@ -6,11 +6,9 @@ var express = require('express');
 var bodyParser = require('body-parser');
 var Twitter = require('twitter');
 
+var maxHashtags = 3;
+
 var app = express();
-var consumer_key = process.env.TWITTER_CONSUMER_KEY;
-var consumer_secret = process.env.TWITTER_CONSUMER_SECRET;
-var access_token_key = process.env.TWITTER_ACCESS_TOKEN_KEY;
-var access_token_secret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
 var twitter = new Twitter({
     consumer_key: process.env.TWITTER_CONSUMER_KEY,
     consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
@@ -34,6 +32,19 @@ app.listen(port, host, function(){
 
 twitter.stream('statuses/filter', {track: 'javascript'}, function(stream) {
     stream.on('data', function(tweet) {
+        var numHashtags;
+
+        if (tweet.lang !== "en") {
+            return;
+        }
+
+        numHashtags = tweet.text.match(/#/g);
+        numHashtags = numHashtags ? numHashtags.length : 0;
+
+        if (numHashtags > maxHashtags) {
+            return;
+        }
+
         console.log(tweet.text);
     });
 });
