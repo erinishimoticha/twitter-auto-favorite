@@ -3,10 +3,20 @@ var port = process.env.PORT  || '8081';
 process.env.PORT = port;
 
 var express = require('express');
-var app = express();
 var bodyParser = require('body-parser');
+var Twitter = require('twitter');
 
-var roleId = process.env.ROLE_ID || 'D9786EA7-BCB4-4229-89F7-8783C821DF8C';
+var app = express();
+var consumer_key = process.env.TWITTER_CONSUMER_KEY;
+var consumer_secret = process.env.TWITTER_CONSUMER_SECRET;
+var access_token_key = process.env.TWITTER_ACCESS_TOKEN_KEY;
+var access_token_secret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+var twitter = new Twitter({
+    consumer_key: process.env.TWITTER_CONSUMER_KEY,
+    consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
+    access_token_key: process.env.TWITTER_ACCESS_TOKEN_KEY,
+    access_token_secret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+});
 
 app.use(bodyParser());
 
@@ -20,4 +30,10 @@ console.log("static dir is", "'" + __dirname + "/assets'");
 
 app.listen(port, host, function(){
 	console.log('listening ');
+});
+
+twitter.stream('statuses/filter', {track: 'javascript'}, function(stream) {
+    stream.on('data', function(tweet) {
+        console.log(tweet.text);
+    });
 });
