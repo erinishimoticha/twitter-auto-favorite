@@ -31,9 +31,11 @@ app.listen(port, host, function(){
 });
 
 twitter.stream('statuses/filter', {track: 'javascript'}, function(stream) {
+    var filterOut = ['php', 'job'];
     stream.on('data', function(tweet) {
         var numHashtags;
 
+        // not english
         if (tweet.lang !== "en") {
             return;
         }
@@ -41,10 +43,36 @@ twitter.stream('statuses/filter', {track: 'javascript'}, function(stream) {
         numHashtags = tweet.text.match(/#/g);
         numHashtags = numHashtags ? numHashtags.length : 0;
 
+        // spam
         if (numHashtags > maxHashtags) {
             return;
         }
 
-        console.log(tweet.text);
+        // @-replies
+        if (tweet.text.indexOf('@') === 0) {
+            return;
+        }
+
+        // contains one of my bad words
+        for (var i = 0; i < filterOut.length; i += 1) {
+            var text = filterOut[i];
+            if (tweet.text.toLowerCase().indexOf(text.toLowerCase()) !== -1) {
+                console.log('skipping', text);
+                return;
+            }
+        }
+
+        console.log("scheduled:", tweet.user.screen_name, tweet.text);
+        setTimeout(function () {
+            twitter.post('favorites/create', {
+                id: tweet.id_str
+            }, function(error, tweets, response){
+                if (error) {
+                    console.log("Err trying to fav.", error);
+                    return;
+                }
+                console.log('success');
+            });
+        }, 1000 * 5 * 60);
     });
 });
