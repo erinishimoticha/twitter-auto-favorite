@@ -5,16 +5,16 @@ process.env.PORT = port;
 var express = require('express');
 var bodyParser = require('body-parser');
 var Twitter = require('twitter');
+var config = require('./config.js');
 
-var maxHashtags = 3;
 
 var app = express();
 var usernames = {};
 var twitter = new Twitter({
-    consumer_key: process.env.TWITTER_CONSUMER_KEY,
-    consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
-    access_token_key: process.env.TWITTER_ACCESS_TOKEN_KEY,
-    access_token_secret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+    consumer_key: config.consumerKey,
+    consumer_secret: config.consumerSecret,
+    access_token_key: config.accessTokenKey,
+    access_token_secret: config.accessTokenSecret
 });
 
 app.use(bodyParser());
@@ -31,54 +31,68 @@ app.listen(port, host, function(){
 	console.log('listening ');
 });
 
-twitter.stream('statuses/filter', {track: 'javascript'}, function(stream) {
-    var filterOut = ['php', 'job'];
-    stream.on('data', function(tweet) {
-        var numHashtags;
+config.streams.forEach(function (streamConfig) {
+    twitter.stream('statuses/filter', {track: streamConfig.track}, streamListenerBuilder(streamConfig));
+});
 
-        // not english
-        if (tweet.lang !== "en") {
-            return;
-        }
+function streamListenerBuilder(streamConfig) {
+    return function (stream) {
+        stream.on('data', function(tweet) {
+            var numHashtags;
 
-        numHashtags = tweet.text.match(/#/g);
-        numHashtags = numHashtags ? numHashtags.length : 0;
-
-        // spam
-        if (numHashtags > maxHashtags) {
-            return;
-        }
-
-        // @-replies
-        if (tweet.text.indexOf('@') === 0) {
-            return;
-        }
-
-        // contains one of my bad words
-        for (var i = 0; i < filterOut.length; i += 1) {
-            var text = filterOut[i];
-            if (tweet.text.toLowerCase().indexOf(text.toLowerCase()) !== -1) {
+            // Tweet language
+            if (streamConfig.language && streamConfig.language.indexOf(tweet.lang) === -1) {
                 return;
             }
-        }
 
-        // Already faved a tweet from this user during this run of the script.
-        if (usernames[tweet.user.screen_name]) {
-            return;
-        }
+            if (streamConfig.maxHashtags > -1) {
+                numHashtags = tweet.text.match(/#/g);
+                numHashtags = numHashtags ? numHashtags.length : 0;
 
-        usernames[tweet.user.screen_name] = true;
-        setTimeout(function () {
-            twitter.post('favorites/create', {
-                id: tweet.id_str
-            }, function(error, tweets, response){
-                if (error) {
-                    usernames[tweet.user.screen_name] = false;
-                    console.log("ERROR", tweet.user.screen_name, tweet.id_str);
+                // spam
+                if (numHashtags > streamConfig.maxHashtags) {
                     return;
                 }
-                console.log("FAV", tweet.text);
-            });
-        }, 1000 * 5 * 60);
-    });
-});
+            }
+
+            // @-replies
+            if (streamConfig.favAtReplies === false && tweet.text.indexOf('@') === 0) {
+                return;
+            }
+
+            // contains one of my bad words
+            if (streamConfig.filter) {
+                for (var i = 0; i < streamConfig.filter.length; i += 1) {
+                    var text = streamConfig.filter[i];
+                    if (tweet.text.toLowerCase().indexOf(text.toLowerCase()) !== -1) {
+                        return;
+                    }
+                }
+            }
+
+            // Already faved a tweet from this user during this run of the script.
+            if (streamConfig.maxFromUser > 0 && usernames[tweet.user.screen_name] >= streamConfig.maxFromUser) {
+                return;
+            }
+
+            // Either no max is configured or we haven't hit the limit yet.
+            if (usernames[tweet.user.screen_name] === undefined) {
+                usernames[tweet.user.screen_name] = 0;
+            }
+
+            // TODO: Use a queue instead
+            setTimeout(function () {
+                twitter.post('favorites/create', {
+                    id: tweet.id_str
+                }, function(error, tweets, response){
+                    if (error) {
+                        console.log("ERROR", tweet.user.screen_name, tweet.id_str);
+                        return;
+                    }
+                    usernames[tweet.user.screen_name] += 1;
+                    console.log("FAV", tweet.text);
+                });
+            }, streamConfig.favDelay);
+        });
+    };
+};

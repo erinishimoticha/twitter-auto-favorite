@@ -1,0 +1,29 @@
+/*
+ * Configuration
+ */
+
+module.exports = {
+    /*
+     * From apps.twitter.com
+     */
+    "consumerKey": "",
+    "consumerSecret": "",
+    "accessTokenKey": "",
+    "accessTokenSecret": "",
+    "streams": [{
+        // search term
+        "track": "javascript",
+        // case insensitive terms which, if they match, the tweet will be skipped.
+        "filter": ["php", "job", "hiring"],
+        // language. Default, skip all but English. Leave blank to match all languages.
+        "language": "en",
+        // Skip a tweet if it contains more hashtags than this. Use -1 for no limit.
+        "maxHashtags": 3,
+        // Skip tweets that would be hidden in the Twitter interface because they begin with '@'.
+        "favAtReplies": false,
+        // Skip a tweet if we have already faved this many tweets from this user. Use -1 for no limit.
+        "maxFromUser": 1,
+        // Number of milliseconds to wait after the tweet shows up to fave it.
+        "favDelay": 300000
+    }]
+};
