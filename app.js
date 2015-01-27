@@ -9,6 +9,7 @@ var Twitter = require('twitter');
 var maxHashtags = 3;
 
 var app = express();
+var usernames = {};
 var twitter = new Twitter({
     consumer_key: process.env.TWITTER_CONSUMER_KEY,
     consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
@@ -57,21 +58,26 @@ twitter.stream('statuses/filter', {track: 'javascript'}, function(stream) {
         for (var i = 0; i < filterOut.length; i += 1) {
             var text = filterOut[i];
             if (tweet.text.toLowerCase().indexOf(text.toLowerCase()) !== -1) {
-                console.log('skipping', text);
                 return;
             }
         }
 
-        console.log("scheduled:", tweet.user.screen_name, tweet.text);
+        // Already faved a tweet from this user during this run of the script.
+        if (usernames[tweet.user.screen_name]) {
+            return;
+        }
+
+        usernames[tweet.user.screen_name] = true;
         setTimeout(function () {
             twitter.post('favorites/create', {
                 id: tweet.id_str
             }, function(error, tweets, response){
                 if (error) {
-                    console.log("Err trying to fav.", error);
+                    usernames[tweet.user.screen_name] = false;
+                    console.log("ERROR", tweet.user.screen_name, tweet.id_str);
                     return;
                 }
-                console.log('success');
+                console.log("FAV", tweet.text);
             });
         }, 1000 * 5 * 60);
     });
