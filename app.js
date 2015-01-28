@@ -5,9 +5,13 @@ process.env.PORT = port;
 var express = require('express');
 var bodyParser = require('body-parser');
 var Twitter = require('twitter');
-var config = require('./config.js');
+var Parser = require('posix-getopt').BasicParser;
 
+var argv = new Parser('c:(config-file)', process.argv);
+var options = makeOptions();
+var requireName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
 
+var config = require(requireName);
 var app = express();
 var usernames = {};
 var twitter = new Twitter({
@@ -109,3 +113,11 @@ actionTimer = setInterval(function () {
         actionQueue.shift()();
     }
 }, 1000);
+
+function makeOptions() {
+    var options = {};
+    while ((option = argv.getopt()) !== undefined) {
+        options[option.option] = option.optarg === undefined ? true : option.optarg;
+    }
+    return options;
+}
