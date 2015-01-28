@@ -2,8 +2,6 @@ var host = '0.0.0.0';
 var port = process.env.PORT  || '8081';
 process.env.PORT = port;
 
-var express = require('express');
-var bodyParser = require('body-parser');
 var Twitter = require('twitter');
 var Parser = require('posix-getopt').BasicParser;
 
@@ -12,7 +10,6 @@ var options = makeOptions();
 var requireName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
 
 var config = require(requireName);
-var app = express();
 var usernames = {};
 var twitter = new Twitter({
     consumer_key: config.consumerKey,
@@ -22,20 +19,6 @@ var twitter = new Twitter({
 });
 var actionQueue = [];
 var actionTimer;
-
-app.use(bodyParser());
-
-app.use(function(req, res, next){
-	console.log('%s %s', req.method, req.url);
-    next();
-});
-
-app.use('/', express.static(__dirname + "/assets"));
-console.log("static dir is", "'" + __dirname + "/assets'");
-
-app.listen(port, host, function () {
-	console.log('Server started at', host + ":" + port);
-});
 
 config.streams.forEach(function (streamConfig) {
     twitter.stream('statuses/filter', {track: streamConfig.track}, streamListenerBuilder(streamConfig));
