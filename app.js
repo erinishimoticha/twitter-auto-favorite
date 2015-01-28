@@ -16,6 +16,8 @@ var twitter = new Twitter({
     access_token_key: config.accessTokenKey,
     access_token_secret: config.accessTokenSecret
 });
+var actionQueue = [];
+var actionTimer;
 
 app.use(bodyParser());
 
@@ -27,8 +29,8 @@ app.use(function(req, res, next){
 app.use('/', express.static(__dirname + "/assets"));
 console.log("static dir is", "'" + __dirname + "/assets'");
 
-app.listen(port, host, function(){
-	console.log('listening ');
+app.listen(port, host, function () {
+	console.log('Server started at', host + ":" + port);
 });
 
 config.streams.forEach(function (streamConfig) {
@@ -80,19 +82,30 @@ function streamListenerBuilder(streamConfig) {
                 usernames[tweet.user.screen_name] = 0;
             }
 
-            // TODO: Use a queue instead
             setTimeout(function () {
-                twitter.post('favorites/create', {
-                    id: tweet.id_str
-                }, function(error, tweets, response){
-                    if (error) {
-                        console.log("ERROR", tweet.user.screen_name, tweet.id_str);
-                        return;
-                    }
-                    usernames[tweet.user.screen_name] += 1;
-                    console.log("FAV", tweet.text);
+                actionQueue.push(function () {
+                    twitter.post('favorites/create', {
+                        id: tweet.id_str
+                    }, function(error, tweets, response){
+                        if (error) {
+                            console.log("ERROR", response.statusCode, tweet.user.screen_name, tweet.id_str);
+                            return;
+                        }
+                        usernames[tweet.user.screen_name] += 1;
+                        console.log("FAV", tweet.text);
+                    });
                 });
             }, streamConfig.favDelay);
         });
+
+        stream.on('error', function (error) {
+            console.log("Error on", streamConfig.track, error.source);
+        });
     };
 };
+
+actionTimer = setInterval(function () {
+    if (actionQueue.length > 0) {
+        actionQueue.shift()();
+    }
+}, 1000);
