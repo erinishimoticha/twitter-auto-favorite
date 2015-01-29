@@ -4,10 +4,14 @@ process.env.PORT = port;
 
 var Twitter = require('twitter');
 var Parser = require('posix-getopt').BasicParser;
+var log = require('loglevel');
 
-var argv = new Parser('c:(config-file)', process.argv);
+var argv = new Parser('c:d', process.argv);
 var options = makeOptions();
+
 var requireName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
+log.setLevel(options['d'] ? 'debug' : 'error');
+log.debug("Options", options);
 
 var config = require(requireName);
 var usernames = {};
@@ -31,6 +35,7 @@ function streamListenerBuilder(streamConfig) {
 
             // Tweet language
             if (streamConfig.language && streamConfig.language.indexOf(tweet.lang) === -1) {
+                log.debug("SKIP", tweet.lang, "is not", streamConfig.language);
                 return;
             }
 
@@ -40,12 +45,14 @@ function streamListenerBuilder(streamConfig) {
 
                 // spam
                 if (numHashtags > streamConfig.maxHashtags) {
+                    log.debug("SKIP", numHashtags, "hashtags is greater than", streamConfig.maxHashtags);
                     return;
                 }
             }
 
             // @-replies
             if (streamConfig.favAtReplies === false && tweet.text.indexOf('@') === 0) {
+                log.debug("SKIP @ reply");
                 return;
             }
 
@@ -54,6 +61,7 @@ function streamListenerBuilder(streamConfig) {
                 for (var i = 0; i < streamConfig.filter.length; i += 1) {
                     var text = streamConfig.filter[i];
                     if (tweet.text.toLowerCase().indexOf(text.toLowerCase()) !== -1) {
+                        log.debug("SKIP contains", text);
                         return;
                     }
                 }
@@ -61,6 +69,7 @@ function streamListenerBuilder(streamConfig) {
 
             // Already faved a tweet from this user during this run of the script.
             if (streamConfig.maxFromUser > 0 && usernames[tweet.user.screen_name] >= streamConfig.maxFromUser) {
+                log.debug("SKIP maxFromUser", tweet,user.screen_name);
                 return;
             }
 
@@ -75,18 +84,18 @@ function streamListenerBuilder(streamConfig) {
                         id: tweet.id_str
                     }, function(error, tweets, response){
                         if (error) {
-                            console.log("ERROR", response.statusCode, tweet.user.screen_name, tweet.id_str);
+                            log.error(error, response);
                             return;
                         }
                         usernames[tweet.user.screen_name] += 1;
-                        console.log("FAV", tweet.text);
+                        log.info("FAV", tweet.text);
                     });
                 });
             }, streamConfig.favDelay);
         });
 
         stream.on('error', function (error) {
-            console.log("Error on", streamConfig.track, error.source);
+            log.error("Stream error", streamConfig.track, error);
         });
     };
 };
@@ -104,3 +113,7 @@ function makeOptions() {
     }
     return options;
 }
+
+process.on('exit', function () {
+    console.log(JSON.stringify(usernames));
+});
