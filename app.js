@@ -5,17 +5,25 @@ process.env.PORT = port;
 var Twitter = require('twitter');
 var Parser = require('posix-getopt').BasicParser;
 var log = require('loglevel');
+var fs = require('fs');
 
 var argv = new Parser('c:d', process.argv);
 var options = makeOptions();
 optAssert('c');
 
-var requireName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
+var configName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
+var cacheName = configName.replace(".js", "-cache.js");
 log.setLevel(options['d'] ? 'debug' : 'error');
 log.debug("Options", options);
 
-var config = require(requireName);
+var config = require(configName);
 var usernames = {};
+try {
+    usernames = require(cacheName);
+} catch (err) {
+    // It'll be created when the process exits.
+}
+
 var twitter = new Twitter({
     consumer_key: config.consumerKey,
     consumer_secret: config.consumerSecret,
@@ -115,8 +123,15 @@ function makeOptions() {
     return options;
 }
 
-process.on('exit', function () {
+process.on('uncaughtException', function () {
     console.log(JSON.stringify(usernames));
+});
+
+process.stdin.resume();
+process.on('SIGINT', function () {
+    console.log(JSON.stringify(usernames));
+    fs.writeFileSync(cacheName, "module.exports = " + JSON.stringify(usernames) + ";");
+    process.exit();
 });
 
 function optAssert(shortCode) {
