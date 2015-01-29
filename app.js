@@ -8,6 +8,7 @@ var log = require('loglevel');
 
 var argv = new Parser('c:d', process.argv);
 var options = makeOptions();
+optAssert('c');
 
 var requireName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
 log.setLevel(options['d'] ? 'debug' : 'error');
@@ -117,3 +118,10 @@ function makeOptions() {
 process.on('exit', function () {
     console.log(JSON.stringify(usernames));
 });
+
+function optAssert(shortCode) {
+    if (options[shortCode] === undefined) {
+        console.log("error: missing required parameter -c config-filename");
+        process.exit();
+    }
+}
