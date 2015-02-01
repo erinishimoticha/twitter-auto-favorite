@@ -6,6 +6,7 @@ var Twitter = require('twitter');
 var Parser = require('posix-getopt').BasicParser;
 var log = require('loglevel');
 var fs = require('fs');
+var moment = require('moment');
 
 var argv = new Parser('c:d', process.argv);
 var options = makeOptions();
@@ -17,9 +18,24 @@ log.setLevel(options['d'] ? 'debug' : 'error');
 log.debug("Options", options);
 
 var config = require(configName);
-var usernames = {};
+var favs = {};
+
 try {
-    usernames = require(cacheName);
+    favs = require(cacheName);
+    Object.keys(favs).forEach(function (name) {
+        var numFaves;
+
+        if (typeof favs[name] === 'object') {
+            return;
+        }
+        numFaves = favs[name];
+
+        favs[name] = {
+            username: name,
+            count: numFaves,
+            date: moment()
+        };
+    });
 } catch (err) {
     // It'll be created when the process exits.
 }
@@ -41,6 +57,7 @@ function streamListenerBuilder(streamConfig) {
     return function (stream) {
         stream.on('data', function(tweet) {
             var numHashtags;
+            var tweetUsername = tweet.user.screen_name;
 
             // Tweet language
             if (streamConfig.language && streamConfig.language.indexOf(tweet.lang) === -1) {
@@ -77,14 +94,19 @@ function streamListenerBuilder(streamConfig) {
             }
 
             // Already faved a tweet from this user during this run of the script.
-            if (streamConfig.maxFromUser > 0 && usernames[tweet.user.screen_name] >= streamConfig.maxFromUser) {
-                log.debug("SKIP maxFromUser", tweet,user.screen_name);
+            if (streamConfig.maxFromUser > 0 && favs[tweetUsername] &&
+                    favs[tweetUsername].count >= streamConfig.maxFromUser) {
+                log.debug("SKIP maxFromUser", tweetUsername);
                 return;
             }
 
             // Either no max is configured or we haven't hit the limit yet.
-            if (usernames[tweet.user.screen_name] === undefined) {
-                usernames[tweet.user.screen_name] = 0;
+            if (favs[tweetUsername] === undefined) {
+                favs[tweetUsername] = {
+                    username: tweetUsername,
+                    count: 0,
+                    date: moment()
+                };
             }
 
             setTimeout(function () {
@@ -93,10 +115,10 @@ function streamListenerBuilder(streamConfig) {
                         id: tweet.id_str
                     }, function(error, tweets, response){
                         if (error) {
-                            log.error(error, response);
+                            log.error(error);
                             return;
                         }
-                        usernames[tweet.user.screen_name] += 1;
+                        favs[tweetUsername].count += 1;
                         log.info("FAV", tweet.text);
                     });
                 });
@@ -124,13 +146,25 @@ function makeOptions() {
 }
 
 process.on('uncaughtException', function () {
-    console.log(JSON.stringify(usernames));
+    console.log(JSON.stringify(favs, null, 4));
 });
 
 process.stdin.resume();
 process.on('SIGINT', function () {
-    console.log(JSON.stringify(usernames));
-    fs.writeFileSync(cacheName, "module.exports = " + JSON.stringify(usernames) + ";");
+    if (Object.keys(favs).length < 5) {
+        // either not worth it or something went terribly wrong; don't overwrite cache.
+        process.exit();
+        return;
+    }
+
+    Object.keys(favs).forEach(function (name) {
+        if (favs[name].count === 0) {
+            delete favs[name];
+        }
+    });
+
+    console.log(JSON.stringify(favs, null, 4));
+    fs.writeFileSync(cacheName, "module.exports = " + JSON.stringify(favs, null, 4) + ";");
     process.exit();
 });
 

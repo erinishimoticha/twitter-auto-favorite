@@ -12,6 +12,7 @@
     "body-parser": "^1.10.2",
     "express": "^4.11.1",
     "loglevel": "^1.2.0",
+    "moment": "^2.9.0",
     "posix-getopt": "^1.1.0",
     "twitter": "^1.1.0"
   }
