@@ -13,6 +13,9 @@ var options = makeOptions();
 optAssert('c');
 
 var configName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
+if (configName.indexOf(".js") === -1) {
+    throw new Error(configName + " is not a valid config file.");
+}
 var cacheName = configName.replace(".js", "-cache.js");
 log.setLevel(options['d'] ? 'debug' : 'error');
 log.debug("Options", options);
