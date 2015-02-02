@@ -113,6 +113,7 @@ function streamListenerBuilder(streamConfig) {
             }
 
             setTimeout(function () {
+                log.debug('QUEUEING', tweet.text);
                 actionQueue.push(function () {
                     twitter.post('favorites/create', {
                         id: tweet.id_str
@@ -149,7 +150,7 @@ function makeOptions() {
 }
 
 process.on('uncaughtException', function () {
-    console.log(JSON.stringify(favs, null, 4));
+    log.error(JSON.stringify(favs, null, 4));
 });
 
 process.stdin.resume();
@@ -166,14 +167,14 @@ process.on('SIGINT', function () {
         }
     });
 
-    console.log(JSON.stringify(favs, null, 4));
+    log.info("Writing", Object.keys(favs).length, "cached users, cancelling", actionQueue.length, "requests");
     fs.writeFileSync(cacheName, "module.exports = " + JSON.stringify(favs, null, 4) + ";");
     process.exit();
 });
 
 function optAssert(shortCode) {
     if (options[shortCode] === undefined) {
-        console.log("error: missing required parameter -c config-filename");
+        log.error("Missing required parameter -c config-filename");
         process.exit();
     }
 }
