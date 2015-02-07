@@ -8,7 +8,7 @@ var log = require('loglevel');
 var fs = require('fs');
 var moment = require('moment');
 
-var argv = new Parser('c:d', process.argv);
+var argv = new Parser('c:dD', process.argv);
 var options = makeOptions();
 optAssert('c');
 
@@ -115,16 +115,20 @@ function streamListenerBuilder(streamConfig) {
             setTimeout(function () {
                 log.debug('QUEUEING', tweet.text);
                 actionQueue.push(function () {
-                    twitter.post('favorites/create', {
-                        id: tweet.id_str
-                    }, function(error, tweets, response){
-                        if (error) {
-                            log.error(error);
-                            return;
-                        }
-                        favs[tweetUsername].count += 1;
+                    if (options['D'] === undefined) {
+                        twitter.post('favorites/create', {
+                            id: tweet.id_str
+                        }, function(error, tweets, response){
+                            if (error) {
+                                log.error(error);
+                                return;
+                            }
+                            favs[tweetUsername].count += 1;
+                            log.info("FAV", tweet.text);
+                        });
+                    } else {
                         log.info("FAV", tweet.text);
-                    });
+                    }
                 });
             }, streamConfig.favDelay);
         });
