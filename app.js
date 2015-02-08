@@ -12,36 +12,14 @@ var argv = new Parser('c:dD', process.argv);
 var options = makeOptions();
 optAssert('c');
 
-var configName = options['c'].indexOf('/') === 0 ? options['c'] : "./" + options['c'];
+var configName = options['c'].indexOf('/') === 0 ? options['c'] : "../" + options['c'];
 if (configName.indexOf(".js") === -1) {
     throw new Error(configName + " is not a valid config file.");
 }
-var cacheName = configName.replace(".js", "-cache.js");
 log.setLevel(options['d'] ? 'debug' : 'error');
 log.debug("Options", options);
 
-var config = require(configName);
-var favs = {};
-
-try {
-    favs = require(cacheName);
-    Object.keys(favs).forEach(function (name) {
-        var numFaves;
-
-        if (typeof favs[name] === 'object') {
-            return;
-        }
-        numFaves = favs[name];
-
-        favs[name] = {
-            username: name,
-            count: numFaves,
-            date: moment()
-        };
-    });
-} catch (err) {
-    // It'll be created when the process exits.
-}
+var config = require('./lib/config.js')(configName);
 
 var twitter = new Twitter({
     consumer_key: config.consumerKey,
@@ -97,15 +75,15 @@ function streamListenerBuilder(streamConfig) {
             }
 
             // Already faved a tweet from this user during this run of the script.
-            if (streamConfig.maxFromUser > 0 && favs[tweetUsername] &&
-                    favs[tweetUsername].count >= streamConfig.maxFromUser) {
+            if (streamConfig.maxFromUser > 0 && config.cache.usernames[tweetUsername] &&
+                    config.cache.usernames[tweetUsername].count >= streamConfig.maxFromUser) {
                 log.debug("SKIP maxFromUser", tweetUsername);
                 return;
             }
 
             // Either no max is configured or we haven't hit the limit yet.
-            if (favs[tweetUsername] === undefined) {
-                favs[tweetUsername] = {
+            if (config.cache.usernames[tweetUsername] === undefined) {
+                config.cache.usernames[tweetUsername] = {
                     username: tweetUsername,
                     count: 0,
                     date: moment()
@@ -123,7 +101,7 @@ function streamListenerBuilder(streamConfig) {
                                 log.error(error);
                                 return;
                             }
-                            favs[tweetUsername].count += 1;
+                            config.cache.usernames[tweetUsername].count += 1;
                             log.info("FAV", tweet.text);
                         });
                     } else {
@@ -154,25 +132,28 @@ function makeOptions() {
 }
 
 process.on('uncaughtException', function () {
-    log.error(JSON.stringify(favs, null, 4));
+    log.error(JSON.stringify(config.cache.usernames, null, 4));
 });
 
 process.stdin.resume();
 process.on('SIGINT', function () {
-    if (Object.keys(favs).length < 5) {
+    if (Object.keys(config.cache.usernames).length < 5) {
         // either not worth it or something went terribly wrong; don't overwrite cache.
         process.exit();
         return;
     }
 
-    Object.keys(favs).forEach(function (name) {
-        if (favs[name].count === 0) {
-            delete favs[name];
+    Object.keys(config.cache.usernames).forEach(function (name) {
+        if (config.cache.usernames[name].count === 0) {
+            delete config.cache.usernames[name];
         }
     });
 
-    log.info("Writing", Object.keys(favs).length, "cached users, cancelling", actionQueue.length, "requests");
-    fs.writeFileSync(cacheName, "module.exports = " + JSON.stringify(favs, null, 4) + ";");
+    log.info("Writing", Object.keys(config.cache.usernames).length, "cached users" +
+        "cancelling", actionQueue.length, "requests");
+    if (options['D'] === undefined) {
+        fs.writeFileSync(config.cacheName, "module.exports = " + JSON.stringify(config.cache, null, 4) + ";");
+    }
     process.exit();
 });
 
