@@ -143,7 +143,7 @@ actionTimer = setInterval(function () {
     if (actionQueue.length > 0) {
         actionQueue.shift()();
     }
-}, 1000 * 60);
+}, 1000 * 20);
 
 function makeOptions() {
     var options = {};
