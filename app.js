@@ -149,7 +149,7 @@ process.on('SIGINT', function () {
         }
     });
 
-    log.info("Writing", Object.keys(config.cache.usernames).length, "cached users" +
+    log.info("Writing", Object.keys(config.cache.usernames).length, "cached users",
         "cancelling", actionQueue.length, "requests");
     if (options['D'] === undefined) {
         fs.writeFileSync(config.cacheName, "module.exports = " + JSON.stringify(config.cache, null, 4) + ";");
