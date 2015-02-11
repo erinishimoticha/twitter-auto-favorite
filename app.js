@@ -121,7 +121,7 @@ actionTimer = setInterval(function () {
     if (actionQueue.length > 0) {
         actionQueue.shift()();
     }
-}, 1000 * 20);
+}, 1000 * 30);
 
 function makeOptions() {
     var options = {};
