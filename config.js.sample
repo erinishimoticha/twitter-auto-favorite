@@ -10,7 +10,7 @@ module.exports = {
     "consumerSecret": "",
     "accessTokenKey": "",
     "accessTokenSecret": "",
-    "streams": [{
+    "stream": {
         // search term
         "track": "javascript",
         // case insensitive terms which, if they match, the tweet will be skipped.
@@ -25,5 +25,5 @@ module.exports = {
         "maxFromUser": 1,
         // Number of milliseconds to wait after the tweet shows up to fave it.
         "favDelay": 300000
-    }]
+    }
 };

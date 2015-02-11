@@ -30,92 +30,88 @@ var twitter = new Twitter({
 var actionQueue = [];
 var actionTimer;
 
-config.streams.forEach(function (streamConfig) {
-    twitter.stream('statuses/filter', {track: streamConfig.track}, streamListenerBuilder(streamConfig));
+var streamConfig = config.stream;
+twitter.stream('statuses/filter', {track: streamConfig.track}, function (stream) {
+    stream.on('data', onTweet);
+    stream.on('error', function (error) {
+        log.error("Stream error", streamConfig.track, error);
+    });
 });
 
-function streamListenerBuilder(streamConfig) {
-    return function (stream) {
-        stream.on('data', function(tweet) {
-            var numHashtags;
-            var tweetUsername = tweet.user.screen_name;
+function onTweet(tweet) {
+    var numHashtags;
+    var tweetUsername = tweet.user.screen_name;
 
-            // Tweet language
-            if (streamConfig.language && streamConfig.language.indexOf(tweet.lang) === -1) {
-                log.debug("SKIP", tweet.lang, "is not", streamConfig.language);
+    // Tweet language
+    if (streamConfig.language && streamConfig.language.indexOf(tweet.lang) === -1) {
+        log.debug("SKIP", tweet.lang, "is not", streamConfig.language);
+        return;
+    }
+
+    if (streamConfig.maxHashtags > -1) {
+        numHashtags = tweet.text.match(/#/g);
+        numHashtags = numHashtags ? numHashtags.length : 0;
+
+        // spam
+        if (numHashtags > streamConfig.maxHashtags) {
+            log.debug("SKIP", numHashtags, "hashtags is greater than", streamConfig.maxHashtags);
+            return;
+        }
+    }
+
+    // @-replies
+    if (streamConfig.favAtReplies === false && tweet.text.indexOf('@') === 0) {
+        log.debug("SKIP @ reply");
+        return;
+    }
+
+    // contains one of my bad words
+    if (streamConfig.filter) {
+        for (var i = 0; i < streamConfig.filter.length; i += 1) {
+            var text = streamConfig.filter[i];
+            if (tweet.text.toLowerCase().indexOf(text.toLowerCase()) !== -1) {
+                log.debug("SKIP contains", text);
                 return;
             }
+        }
+    }
 
-            if (streamConfig.maxHashtags > -1) {
-                numHashtags = tweet.text.match(/#/g);
-                numHashtags = numHashtags ? numHashtags.length : 0;
+    // Already faved a tweet from this user during this run of the script.
+    if (streamConfig.maxFromUser > 0 && config.cache.usernames[tweetUsername] &&
+            config.cache.usernames[tweetUsername].count >= streamConfig.maxFromUser) {
+        log.debug("SKIP maxFromUser", tweetUsername);
+        return;
+    }
 
-                // spam
-                if (numHashtags > streamConfig.maxHashtags) {
-                    log.debug("SKIP", numHashtags, "hashtags is greater than", streamConfig.maxHashtags);
-                    return;
-                }
-            }
+    // Either no max is configured or we haven't hit the limit yet.
+    if (config.cache.usernames[tweetUsername] === undefined) {
+        config.cache.usernames[tweetUsername] = {
+            username: tweetUsername,
+            count: 0,
+            date: moment()
+        };
+    }
 
-            // @-replies
-            if (streamConfig.favAtReplies === false && tweet.text.indexOf('@') === 0) {
-                log.debug("SKIP @ reply");
-                return;
-            }
-
-            // contains one of my bad words
-            if (streamConfig.filter) {
-                for (var i = 0; i < streamConfig.filter.length; i += 1) {
-                    var text = streamConfig.filter[i];
-                    if (tweet.text.toLowerCase().indexOf(text.toLowerCase()) !== -1) {
-                        log.debug("SKIP contains", text);
+    setTimeout(function () {
+        log.debug('QUEUEING', tweet.text);
+        actionQueue.push(function () {
+            if (options['D'] === undefined) {
+                twitter.post('favorites/create', {
+                    id: tweet.id_str
+                }, function(error, tweets, response){
+                    if (error) {
+                        log.error(error);
                         return;
                     }
-                }
-            }
-
-            // Already faved a tweet from this user during this run of the script.
-            if (streamConfig.maxFromUser > 0 && config.cache.usernames[tweetUsername] &&
-                    config.cache.usernames[tweetUsername].count >= streamConfig.maxFromUser) {
-                log.debug("SKIP maxFromUser", tweetUsername);
-                return;
-            }
-
-            // Either no max is configured or we haven't hit the limit yet.
-            if (config.cache.usernames[tweetUsername] === undefined) {
-                config.cache.usernames[tweetUsername] = {
-                    username: tweetUsername,
-                    count: 0,
-                    date: moment()
-                };
-            }
-
-            setTimeout(function () {
-                log.debug('QUEUEING', tweet.text);
-                actionQueue.push(function () {
-                    if (options['D'] === undefined) {
-                        twitter.post('favorites/create', {
-                            id: tweet.id_str
-                        }, function(error, tweets, response){
-                            if (error) {
-                                log.error(error);
-                                return;
-                            }
-                            config.cache.usernames[tweetUsername].count += 1;
-                            log.info("FAV", tweet.text);
-                        });
-                    } else {
-                        log.info("FAV", tweet.text);
-                    }
+                    config.cache.usernames[tweetUsername].count += 1;
+                    log.info("FAV", tweet.text);
                 });
-            }, streamConfig.favDelay);
+            } else {
+                log.info("FAV", tweet.text);
+            }
         });
-
-        stream.on('error', function (error) {
-            log.error("Stream error", streamConfig.track, error);
-        });
-    };
-};
+    }, streamConfig.favDelay);
+}
 
 actionTimer = setInterval(function () {
     if (actionQueue.length > 0) {
