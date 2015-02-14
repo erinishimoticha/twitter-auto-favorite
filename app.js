@@ -5,7 +5,6 @@ process.env.PORT = port;
 var Twitter = require('twitter');
 var Parser = require('posix-getopt').BasicParser;
 var log = require('loglevel');
-var fs = require('fs');
 var moment = require('moment');
 
 var argv = new Parser('c:dD', process.argv);
@@ -92,18 +91,31 @@ function onTweet(tweet) {
         };
     }
 
+    // already faved this tweet
+    if (config.cache.favorites.indexOf(tweet.id_str) > -1) {
+        return;
+    }
+
     setTimeout(function () {
         log.debug('QUEUEING', tweet.text);
         actionQueue.push(function () {
             if (options['D'] === undefined) {
                 twitter.post('favorites/create', {
                     id: tweet.id_str
-                }, function(error, tweets, response){
-                    if (error) {
-                        log.error(error);
+                }, function(errors, tweets, response){
+                    if (errors) {
+                        if (errors[0].code === 139) {
+                            if (config.cache.favorites.indexOf(tweet.id_str) === -1) {
+                                config.cache.favorites.push(tweet.id_str);
+                            }
+                            log.debug("Already faved", tweet.id_str);
+                            return;
+                        };
+                        log.error(errors);
                         return;
                     }
                     config.cache.usernames[tweetUsername].count += 1;
+                    config.cache.favorites.push(tweet.id_str);
                     log.info("FAV", tweet.text);
                 });
             } else {
@@ -127,29 +139,15 @@ function makeOptions() {
     return options;
 }
 
-process.on('uncaughtException', function () {
-    log.error(JSON.stringify(config.cache.usernames, null, 4));
+process.on('uncaughtException', function (err) {
+    log.error(JSON.stringify(config.cache, null, 4));
+    log.error(err);
+    process.exit();
 });
 
 process.stdin.resume();
 process.on('SIGINT', function () {
-    if (Object.keys(config.cache.usernames).length < 5) {
-        // either not worth it or something went terribly wrong; don't overwrite cache.
-        process.exit();
-        return;
-    }
-
-    Object.keys(config.cache.usernames).forEach(function (name) {
-        if (config.cache.usernames[name].count === 0) {
-            delete config.cache.usernames[name];
-        }
-    });
-
-    log.info("Writing", Object.keys(config.cache.usernames).length, "cached users",
-        "cancelling", actionQueue.length, "requests");
-    if (options['D'] === undefined) {
-        fs.writeFileSync(config.cacheName, "module.exports = " + JSON.stringify(config.cache, null, 4) + ";");
-    }
+    config.writeCache(options, log, actionQueue);
     process.exit();
 });
 
