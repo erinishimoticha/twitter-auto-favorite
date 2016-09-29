@@ -1,14 +1,9 @@
-var host = '0.0.0.0';
-var port = process.env.PORT  || '8081';
-process.env.PORT = port;
-
 var Twitter = require('twitter');
-var Parser = require('posix-getopt').BasicParser;
+var quasix = require('quasix-getopt');
 var log = require('loglevel');
 var moment = require('moment');
 
-var argv = new Parser('c:dD', process.argv);
-var options = makeOptions();
+var options = quasix.parse();
 optAssert('c');
 
 var configName = options['c'].indexOf('/') === 0 ? options['c'] : "../" + options['c'];
@@ -131,14 +126,6 @@ actionTimer = setInterval(function () {
     }
 }, 1000 * 30);
 
-function makeOptions() {
-    var options = {};
-    while ((option = argv.getopt()) !== undefined) {
-        options[option.option] = option.optarg === undefined ? true : option.optarg;
-    }
-    return options;
-}
-
 process.on('uncaughtException', function (err) {
     log.error(JSON.stringify(config.cache, null, 4));
     log.error(err);
@@ -153,7 +140,7 @@ process.on('SIGINT', function () {
 
 function optAssert(shortCode) {
     if (options[shortCode] === undefined) {
-        log.error("Missing required parameter -c config-filename");
+        log.error("Missing required parameter: " + "c");
         process.exit();
     }
 }
